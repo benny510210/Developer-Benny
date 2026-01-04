@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>BennyDL — Video Downloader</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Download video TikTok, Instagram, Facebook, X, dan lainnya dengan cepat.">
+  <style>
+    :root{--bg:#0f172a;--card:#020617;--acc:#38bdf8;--mut:#94a3b8}
+    *{box-sizing:border-box}
+    body{
+      margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+      background:var(--bg);color:#fff;font-family:Arial,sans-serif
+    }
+    .box{
+      background:var(--card);padding:22px;border-radius:14px;
+      width:100%;max-width:420px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.35)
+    }
+    h2{margin:6px 0 8px}
+    p{margin:0 0 12px;color:#cbd5f5}
+    .row{display:flex;gap:8px}
+    input{
+      flex:1;padding:12px;border-radius:10px;border:none;outline:none
+    }
+    button{
+      padding:12px;border-radius:10px;border:none;background:var(--acc);
+      color:#001018;font-weight:700;cursor:pointer
+    }
+    button.ghost{background:#0b1220;color:#cbd5f5;border:1px solid #1e293b}
+    #status{margin:10px 0;color:#cbd5f5}
+    #result a{
+      display:block;margin-top:10px;color:var(--acc);word-break:break-all
+    }
+    .badge{display:inline-block;padding:4px 8px;border-radius:999px;background:#0b1220;border:1px solid #1e293b;color:#cbd5f5;margin:6px 4px}
+    .footer{margin-top:14px;font-size:12px;color:var(--mut)}
+    .hidden{display:none}
+    #canvas{border:1px solid #ccc;width:100%;height:300px;margin-top:20px;}
+  </style>
+</head>
+<body>
+  <div class="box">
+    <span class="badge">TikTok</span>
+    <span class="badge">Instagram</span>
+    <span class="badge">Facebook</span>
+    <span class="badge">X</span>
+    <h2>BennyDL</h2>
+    <p>Tempel link → Download</p>
+    <div class="row">
+      <input id="url" placeholder="Tempel link video di sini">
+      <button class="ghost" onclick="pasteLink()">Paste</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button style="flex:1" onclick="go()">Download</button>
+      <button class="ghost" onclick="copyResult()">Copy</button>
+    </div>
+    <div id="status"></div>
+    <div id="result"></div>
+    <!-- Download Audio, Foto & Canvas -->
+    <button onclick="downloadAudio()">Download Audio</button>
+    <button onclick="downloadImage()">Download Image</button>
+    <canvas id="canvas"></canvas>
+    <div class="footer">© Benny Artady</div>
+  </div>
+  
+  <script>
+    const statusEl = document.getElementById('status');
+    const resultEl = document.getElementById('result');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    let imgData = null;
+
+    function setStatus(t){ statusEl.textContent = t; }
+    function showLink(url, label='⬇️ Download'){ resultEl.innerHTML = `<a href="${url}" target="_blank">${label}</a>`; }
+    function pasteLink(){ navigator.clipboard.readText().then(t => { if(t) document.getElementById('url').value=t; }); }
+    function copyResult(){ const a = resultEl.querySelector('a'); if(!a){ setStatus('Belum ada link untuk disalin.'); return; } navigator.clipboard.writeText(a.href).then(() => setStatus('Link disalin.')); }
+
+    function platformOf(u){
+      u=u.toLowerCase();
+      if(u.includes('tiktok')) return 'tiktok';
+      if(u.includes('instagram')) return 'instagram';
+      if(u.includes('facebook')||u.includes('fb.watch')) return 'facebook';
+      if(u.includes('x.com')||u.includes('twitter')) return 'x';
+      if(u.includes('youtu')) return 'youtube';
+      return 'unknown';
+    }
+
+    function go(){
+      const url = document.getElementById('url').value.trim();
+      if(!url){ setStatus('Masukkan link video dulu.'); return; }
+      resultEl.innerHTML='';
+      const pf = platformOf(url);
+      setStatus('Mendeteksi platform: '+pf+' …');
+      
+      // Urutan API (fallback otomatis)
+      apiTikwm(url, pf);
+    }
+
+    // API 1 — TikTok fokus (paling stabil utk TT)
+    function apiTikwm(url, pf){
+      setStatus('Mencoba server 1 …');
+      fetch('https://tikwm.com/api/?url='+encodeURIComponent(url))
+        .then(r => r.json())
+        .then(d => {
+          if(d.data && d.data.play){
+            showLink(d.data.play, '⬇️ Download (Server 1)');
+            setStatus('Berhasil.');
+          }else{
+            apiCobalt(url, pf);
+          }
+        })
+        .catch(() => apiCobalt(url, pf));
+    }
+
+    // API 2 — Multi platform
+    function apiCobalt(url, pf){
+      setStatus('Server 1 gagal, mencoba server 2 …');
+      fetch('https://api.cobalt.tools/api/json',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({url})
+      })
+      .then(r => r.json())
+      .then(d => {
+        if(d.url){
+          showLink(d.url, '⬇️ Download (Server 2)');
+          setStatus('Berhasil.');
+        }else{
+          apiBackup(url);
+        }
+      })
+      .catch(() => apiBackup(url));
+    }
+
+    // API 3 — Backup sederhana (kadang hidup)
+    function apiBackup(url){
+      setStatus('Server 2 gagal, mencoba server 3 …');
+      fetch('https://ssstik.io/abc?url='+encodeURIComponent(url))
+        .then(r => r.text())
+        .then(() => {
+          setStatus('Server 3 tidak mendukung browser ini.');
+        })
+        .catch(() => {
+          setStatus('Semua server bermasalah. Coba lagi nanti / ganti link.');
+        });
+    }
+
+    // Function to download audio
+    function downloadAudio() {
+      const url = document.getElementById('url').value.trim();
+      if (!url) {
+        setStatus('Masukkan link video terlebih dahulu.');
+        return;
+      }
+      fetch(`https://api.audio-downloader.com?url=${encodeURIComponent(url)}`)
+        .then(r => r.json())
+        .then(d => {
+          if (d.audio_url) {
+            showLink(d.audio_url, '⬇️ Download Audio');
+            setStatus('Audio berhasil ditemukan.');
+          } else {
+            setStatus('Audio tidak ditemukan.');
+          }
+        })
+        .catch(() => setStatus('Gagal mengunduh audio.'));
+    }
+
+    // Function to download image
+    function downloadImage() {
+      const url = document.getElementById('url').value.trim();
+      if (!url) {
+        setStatus('Masukkan link video terlebih dahulu.');
+        return;
+      }
+      fetch(`https://api.image-downloader.com?url=${encodeURIComponent(url)}`)
+        .then(r => r.json())
+        .then(d => {
+          if (d.image_url) {
+            showLink(d.image_url, '⬇️ Download Image');
+            setStatus('Image berhasil ditemukan.');
+            displayImage(d.image_url);
+          } else {
+            setStatus('Gambar tidak ditemukan.');
+          }
+        })
+        .catch(() => setStatus('Gagal mengunduh gambar.'));
+    }
+
+    // Function to display image on canvas
+    function displayImage(url) {
+      const img = new Image();
+      img.src = url;
+      img.onload = () => {
+        canvas.width =
